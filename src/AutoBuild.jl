@@ -140,10 +140,18 @@ supported ones. A few additional keyword arguments are accept:
   package. This can for example be used to invoke an initialization API of a
   shared library.
 
+* `augment_platform_block` may be set to a string containing Julia code; if
+  present, this code will be inserted into the top-level of the
+  generated JLL package. It must define a function `augment_platform` that takes
+  as a single argument, the target platform and returns the target platform, with
+  amended tags. This augmented platform will then be used by the JLL wrapper to select
+  the artifact.
+
 !!! note
 
-    The `init_block` keyword argument is experimental and may be removed
-    in a future version of this package. Please use it sparingly.
+    The `init_block` and `augment_platform_block` keyword arguments are experimental
+    and may be removed in a future version of this package. Please use it sparingly.
+
 """
 function build_tarballs(ARGS, src_name, src_version, sources, script,
                         platforms, products, dependencies;
@@ -302,7 +310,7 @@ function build_tarballs(ARGS, src_name, src_version, sources, script,
         # Dependencies that must be downloaded
         dependencies,
     )
-    extra_kwargs = extract_kwargs(kwargs, (:lazy_artifacts, :init_block))
+    extra_kwargs = extract_kwargs(kwargs, (:lazy_artifacts, :init_block, :augment_platform_block))
 
     if meta_json_stream !== nothing
         # If they've asked for the JSON metadata, by all means, give it to them!
@@ -583,7 +591,8 @@ function get_meta_json(
                    dependencies::Vector{<:AbstractDependency};
                    julia_compat::String = DEFAULT_JULIA_VERSION_SPEC,
                    lazy_artifacts::Bool = false,
-                   init_block::String = "")
+                   init_block::String = "",
+                   augment_platform_block::String = "")
 
     dict = Dict(
         "name" => src_name,
@@ -595,6 +604,7 @@ function get_meta_json(
         "julia_compat" => julia_compat,
         "lazy_artifacts" => lazy_artifacts,
         "init_block" => init_block,
+        "augment_platform_block" => augment_platform_block,
     )
     # Do not write the list of platforms when building only for `AnyPlatform`
     if platforms != [AnyPlatform()]
@@ -1021,6 +1031,7 @@ function rebuild_jll_package(obj::Dict;
         lazy_artifacts = lazy_artifacts,
         julia_compat = get(obj, "julia_compat", DEFAULT_JULIA_VERSION_SPEC),
         init_block = get(obj, "init_block", ""),
+        augment_platform_block = get(obj, "augment_platform_block", ""),
         from_scratch = from_scratch,
     )
 end
@@ -1125,7 +1136,8 @@ function build_jll_package(src_name::String,
                            verbose::Bool = false,
                            julia_compat::String = DEFAULT_JULIA_VERSION_SPEC,
                            lazy_artifacts::Bool = false,
-                           init_block = "")
+                           init_block = "",
+                           augment_platform_block = "",)
     # Make way, for prince artifacti
     mkpath(joinpath(code_dir, "src", "wrappers"))
 
@@ -1259,6 +1271,17 @@ function build_jll_package(src_name::String,
         if lazy_artifacts
             println(io, "using LazyArtifacts")
         end
+
+        if !isempty(augment_platform_block)
+            print(io, """
+                $(augment_platform_block)
+            """)
+        else
+            print(io, """
+                augment_platform(platform) = platform
+            """)
+        end
+
         print(io, """
         import JLLWrappers
 
@@ -1457,7 +1480,7 @@ function build_project_dict(name, version, dependencies::Array{Dependency}, juli
         "deps" => Dict{String,Any}(),
         # We require at least Julia 1.3+, for Pkg.Artifacts support, but we only claim
         # Julia 1.0+ by default so that empty JLLs can be installed on older versions.
-        "compat" => Dict{String,Any}("JLLWrappers" => "1.2.0",
+        "compat" => Dict{String,Any}("JLLWrappers" => "1.4.0",
                                      "julia" => "$(julia_compat)")
     )
 
