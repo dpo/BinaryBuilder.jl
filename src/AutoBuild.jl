@@ -1260,6 +1260,36 @@ function build_jll_package(src_name::String,
         end
     end
 
+    if !isempty(augment_platform_block)
+        pkg_dir = joinpath(code_dir, ".pkg")
+        !ispath(pkg_dir) && mkdir(pkg_dir)
+        open(joinpath(pkg_dir, "platform_augmentation.jl"), "w") do io
+            println(io, """
+            $(augment_platform_block)
+            """)
+        end
+
+        open(joinpath(pkg_dir, "select_artifact.jl"), "w") do io
+            println(io, """
+            using TOML, Artifacts, Base.BinaryPlatforms
+            include("./platform_augmentation.jl")
+            artifacts_toml = joinpath(dirname(@__DIR__), "Artifacts.toml")
+
+            # Get "target triplet" from ARGS, if given (defaulting to the host triplet otherwise)
+            target_triplet = get(ARGS, 1, Base.BinaryPlatforms.host_triplet())
+
+            # Augment this platform object with any special tags we require
+            platform = augment_platform!(HostPlatform(parse(Platform, target_triplet)))
+
+            # Select all downloadable artifacts that match that platform
+            artifacts = select_downloadable_artifacts(artifacts_toml; platform)
+
+            #Output the result to `stdout` as a TOML dictionary
+            TOML.print(stdout, artifacts)
+            """)
+        end
+    end
+
     # Generate target-demuxing main source file.
     open(joinpath(code_dir, "src", "$(src_name)_jll.jl"), "w") do io
         print(io, """
@@ -1274,11 +1304,7 @@ function build_jll_package(src_name::String,
 
         if !isempty(augment_platform_block)
             print(io, """
-                $(augment_platform_block)
-            """)
-        else
-            print(io, """
-                augment_platform(platform) = platform
+            include(joinpath("..", ".pkg", "platform_augmentation.jl"))
             """)
         end
 
