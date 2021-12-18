@@ -142,7 +142,7 @@ supported ones. A few additional keyword arguments are accept:
 
 * `augment_platform_block` may be set to a string containing Julia code; if
   present, this code will be inserted into the top-level of the
-  generated JLL package. It must define a function `augment_platform` that takes
+  generated JLL package. It must define a function `augment_platform!` that takes
   as a single argument, the target platform and returns the target platform, with
   amended tags. This augmented platform will then be used by the JLL wrapper to select
   the artifact.
@@ -1304,6 +1304,7 @@ function build_jll_package(src_name::String,
 
         if !isempty(augment_platform_block)
             print(io, """
+            include(path) = Base.include(@__MODULE__, path)
             include(joinpath("..", ".pkg", "platform_augmentation.jl"))
             """)
         end
