@@ -1269,7 +1269,7 @@ function build_jll_package(src_name::String,
             """)
         end
 
-        open(joinpath(pkg_dir, "select_artifact.jl"), "w") do io
+        open(joinpath(pkg_dir, "select_artifacts.jl"), "w") do io
             println(io, """
             using TOML, Artifacts, Base.BinaryPlatforms
             include("./platform_augmentation.jl")
